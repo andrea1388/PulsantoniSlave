@@ -5,6 +5,8 @@
  */
 #include <RFM69.h>
 #include <EEPROM.h>
+#include <Cmd.h>
+#include "Antirimbalzo.h"
 
 #define pinPULSANTE 3
 #define PINBATTERIA 0 // per lettura tensione batteria 
@@ -47,6 +49,7 @@ bool discovered;
 RFM69 radio=RFM69(RFM69_CS, RFM69_IRQ, true, RFM69_IRQN);
 #define MAXBESTNEIGHBOURS 5
 Nodo* bestn[MAXBESTNEIGHBOURS];
+Antirimbalzo swVoto;
 
 void setup() {
   // accende subito il led
@@ -75,10 +78,12 @@ void setup() {
   radio._printpackets=false;
   discovered=false;
   for (int i=0;i<MAXBESTNEIGHBOURS;i++) bestn[i]=new Nodo();
+  swVoto.cbInizioStatoOn=ElaboraPulsante;
 }
 
 // algoritmo 1
 void loop() {
+  swVoto.Elabora(digitalRead(pinPULSANTE)==LOW);
   static unsigned long int tckradio=0;
   if(Serial.available()) ProcessaDatiSeriali();
   ElaboraPulsante();
@@ -104,40 +109,65 @@ void ElaboraRadio() {
   if(!radio.receiveDone()) return;
   CostruisciListaNodi(radio.SENDERID, radio.RSSI,radio.DATALEN,radio.DATA[0]);
   if(radio.TARGETID!=indirizzo) return;
-  nodo=radio.SENDERID;
   byte destinatario=radio.DATA[0];
-    delay(5);     
+  delay(5);     
   if(destinatario==indirizzo) {
     switch(radio.DATA[1]) {
-      case 's':
-          ElaboraCmdInvioSync((byte *)radio.DATA); // cmd s
+      case 0xaa: // modo voto
+          if(!modoVoto)
+          {
+            modoVoto=true;
+            InizioVoto();
+          }
           break;
-      case 'p':
-          ElaboraPoll(); // cmd p
+      case 0x55: // modo normale
+          if(modoVoto)
+          {
+            modoVoto=false;
+            FineVoto();
+          }
+          RispondiPollModoNonVoto(radio.SENDERID);
           break;
-      case 'd':
-          ElaboraCmdDiscovery(); // cmd d
-          break;
+
     }
   } else {
       if(radio._printpackets) Serial.println(F("pkt da ritrasmettere"));
-      if(!radio.send(destinatario, radio.DATA, radio.DATALEN,false)) {
-        radioSetup();
-        return;
-      }
+      radio.send(destinatario, (const byte *)radio.DATA, radio.DATALEN,false);
     }
 }
-
+void RispondiPollModoNonVoto(byte rip)
+{
+  TxPkt p;
+  p.destinatario=1;
+  if(modifichealistabest>0)
+  {
+    modifichealistabest--;
+    p.ListaBest(indirizzibest,segnalebest);
+  }
+  else
+  {
+    p.Sync(micros(),livbat);
+  }
+  radio.send(rip, (const byte *)p.dati, p.len,false);
+}
+void InizioVoto() 
+{
+  votato=false;
+  impostaled(100,100);
+}
+void FineVoto() 
+{
+  impostaled(100,100);
+}
 // algoritmo 3
 void ElaboraPulsante() {
-  if(stato==SINCRONIZZATO) {
-    if(digitalRead(pinPULSANTE)==LOW) {
-      stato=VOTATO;
-      Tvoto=micros()-TrxSync+TdaInizioVoto;
-      impostaled(1,1);
-      Serial.print(F("VOTATO: tvoto="));      
-      Serial.println(Tvoto,DEC);
-    }
+  if(modoVoto) 
+  {
+    votato=true;
+    Tvoto=micros();
+    impostaled(1,1);
+    Serial.print(F("VOTATO: tvoto="));      
+    Serial.println(Tvoto,DEC);
   }
 }
 
