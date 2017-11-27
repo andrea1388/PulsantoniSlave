@@ -72,7 +72,7 @@ void setup() {
   // legge indirizzo slave dal byte 0 della eeprom
   indirizzo = EEPROM.read(0);
   // info su seriale
-  Serial.begin(250000);
+  Serial.begin(9600);
   Serial.println(F("Slave - Firmware: p4.0"));
   Serial.print(F("Indirizzo: "));
   Serial.println(indirizzo);
@@ -100,6 +100,7 @@ void loop() {
   swVoto.Elabora(digitalRead(pinPULSANTE)==LOW);
   ElaboraRadio();
   led.Elabora();
+  cmdPoll();
 }
 
 // algoritmo 2
@@ -107,11 +108,11 @@ void ElaboraRadio() {
   if(!radio.receiveDone()) return;
   CostruisciListaNodi(radio.SENDERID, radio.RSSI,radio.DATALEN,radio.DATA[0]);
   if(radio.TARGETID!=indirizzo) return;
-  byte destinatario=radio.DATA[0];
+  byte destinatario=radio.DATA[1];
   delay(5);     
   if(destinatario==indirizzo) {
     led.OndaQuadra(200,2800);
-    switch(radio.DATA[1]) {
+    switch(radio.DATA[2]) {
       case 0xaa: // modo voto
           if(!modoVoto)
           {
@@ -137,7 +138,7 @@ void ElaboraRadio() {
 }
 void RispondiPollModoNonVoto(byte rip)
 {
-  TxPkt p(1);
+  TxPkt p(indirizzo,1);
   if(modifichealistabest>0)
   {
     modifichealistabest--;
@@ -152,7 +153,7 @@ void RispondiPollModoNonVoto(byte rip)
 
 void RispondiPollModoVoto(byte rip)
 {
-  TxPkt p(1);
+  TxPkt p(indirizzo,1);
   if(votato)
   {
     p.SetOraVoto(Tvoto);

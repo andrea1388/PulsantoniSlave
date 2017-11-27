@@ -3,7 +3,7 @@
 
 class TxPkt {
     public:
-        TxPkt(byte destinatario);
+        TxPkt(byte mittente, byte destinatario);
         void ListaBest(Nodo *best);
         void Sync(unsigned long int micros,byte livbatt);
         void NonVotato();
@@ -13,5 +13,6 @@ class TxPkt {
 
     protected:
         byte destinatario;
+        byte mittente;
 
 };
