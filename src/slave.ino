@@ -92,6 +92,7 @@ void setup() {
   cmdAdd("SP", serialCmdStampaPacchettiRadio);
   cmdAdd("W", serialCmdMemorizzaIndirizzo);
   FineVoto();
+  for(byte i=0;i<MAXBESTNEIGHBOURS;i++) bestn[i].indirizzo=0;
 }
 
 // algoritmo 1
@@ -210,8 +211,8 @@ void radioSetup() {
 void CostruisciListaNodi(byte ind, int sign, byte len, byte dest) {
     // se il nodo ricevuto è più forte del più debole lo sostituisco con questo
     if(ind==0) return;
-    if(dest!=0) return;
-    if(len<2) return;
+    //if(dest!=0) return;
+    //if(len<2) return;
     // controlla se il nuovo nodo è già in lista
     bool giainlista=false;
     for (int i=0;i<MAXBESTNEIGHBOURS;i++) if(bestn[i].indirizzo==ind) {bestn[i].segnale=sign; giainlista=true;}
