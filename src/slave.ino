@@ -28,7 +28,7 @@
 
 
 
-Nodo::Nodo() { indirizzo=255; segnale=-127;}
+Nodo::Nodo() { indirizzo=0; segnale=-127;}
 
 
 
@@ -85,14 +85,12 @@ void setup() {
 
   radio._printpackets=false;
 
-  //for (int i=0;i<MAXBESTNEIGHBOURS;i++) bestn[i]=new Nodo();
   swVoto.cbInizioStatoOn=ElaboraPulsante;
 
   cmdInit(&Serial);
   cmdAdd("SP", serialCmdStampaPacchettiRadio);
   cmdAdd("W", serialCmdMemorizzaIndirizzo);
   FineVoto();
-  for(byte i=0;i<MAXBESTNEIGHBOURS;i++) bestn[i].indirizzo=0;
 }
 
 // algoritmo 1
@@ -216,10 +214,11 @@ void CostruisciListaNodi(byte ind, int sign, byte len, byte dest) {
     //if(len<2) return;
     // controlla se il nuovo nodo è già in lista
     bool giainlista=false;
-    for (int i=0;i<MAXBESTNEIGHBOURS;i++) if(bestn[i].indirizzo==ind) {bestn[i].segnale=sign; giainlista=true;}
+    for (int i=0;i<MAXBESTNEIGHBOURS;i++) if(bestn[i].indirizzo==ind) {bestn[i].segnale=sign; giainlista=true;};
     // se non c'è calcola trova l'indirizzo del più scarso
-    if(!giainlista) {
-      int minimo=bestn[0].segnale;
+    if(!giainlista) 
+    {
+      int minimo=127;
       byte indicemin=0;
       for (int i=0;i<MAXBESTNEIGHBOURS;i++) if(bestn[i].segnale<minimo) {minimo=bestn[i].segnale; indicemin=i;};
       // se questo è migliore del più scarso lo sostituisce
@@ -229,16 +228,25 @@ void CostruisciListaNodi(byte ind, int sign, byte len, byte dest) {
     Nodo tmp;
     for (int i=0;i<MAXBESTNEIGHBOURS-1;i++) 
       for (int k=i+1;k<MAXBESTNEIGHBOURS;k++) 
-        if(bestn[i].segnale<bestn[k].segnale) {tmp.indirizzo=bestn[k].indirizzo; tmp.segnale=bestn[k].segnale; bestn[k].segnale=bestn[i].segnale; bestn[k].indirizzo=bestn[i].indirizzo;bestn[i].indirizzo=tmp.indirizzo;bestn[i].segnale=tmp.segnale; modifichealistabest=3;}
+        if(bestn[k].segnale>bestn[i].segnale) 
+        {
+          tmp.indirizzo=bestn[k].indirizzo; 
+          tmp.segnale=bestn[k].segnale; 
+          bestn[k].segnale=bestn[i].segnale; 
+          bestn[k].indirizzo=bestn[i].indirizzo;
+          bestn[i].indirizzo=tmp.indirizzo;
+          bestn[i].segnale=tmp.segnale; 
+          modifichealistabest=3;
+        };
     
     if(radio._printpackets) {
       Serial.print(F("best: i/s "));
-      for (int i=0;i<MAXBESTNEIGHBOURS;i++) {
+      for (int i=0;i<MAXBESTNEIGHBOURS;i++) 
+      {
         Serial.print(bestn[i].indirizzo);
         Serial.print("/");
         Serial.print(bestn[i].segnale);
         Serial.print(" ");
-        
       }
       Serial.println(" ");
     }
