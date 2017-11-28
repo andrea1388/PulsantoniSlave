@@ -5,18 +5,18 @@
 TxPkt::TxPkt(byte mitt, byte dest) {
     destinatario=dest;
     mittente=mitt;
+    len=0;
 }
 
 void TxPkt::ListaBest(Nodo* best)
 {
     len=13;
-    dati=new byte[len];
     dati[0]=mittente;
     dati[1]=destinatario;
     dati[2]=2;
     for(int j=0;j<5;j++)
     {
-        dati[j+3]=best[j].indirizzo;
+        dati[2*j+3]=best[j].indirizzo;
         dati[2*j+4]=best[j].segnale;
     }
     
@@ -25,7 +25,6 @@ void TxPkt::ListaBest(Nodo* best)
 void TxPkt::Sync(unsigned long int micros,byte livbatt)
 {
     len=8;
-    dati=new byte[len];
     dati[0]=mittente;
     dati[1]=destinatario;
     dati[2]=1;
@@ -38,7 +37,6 @@ void TxPkt::Sync(unsigned long int micros,byte livbatt)
 void TxPkt::NonVotato()
 {
     len=3;
-    dati=new byte[len];
     dati[0]=mittente;
     dati[1]=destinatario;
     dati[2]=4;
@@ -46,7 +44,6 @@ void TxPkt::NonVotato()
 void TxPkt::SetOraVoto(unsigned long int micros)
 {
     len=7;
-    dati=new byte[len];
     dati[0]=mittente;
     dati[1]=destinatario;
     dati[2]=3;

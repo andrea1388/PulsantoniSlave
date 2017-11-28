@@ -8,7 +8,7 @@ class TxPkt {
         void Sync(unsigned long int micros,byte livbatt);
         void NonVotato();
         void SetOraVoto(unsigned long int);
-        byte *dati;
+        byte dati[20];
         byte len;
 
     protected:

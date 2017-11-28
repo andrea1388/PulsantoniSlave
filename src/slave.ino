@@ -41,6 +41,8 @@ Antirimbalzo swVoto;
 bool votato=false;
 bool modoVoto=false;
 byte modifichealistabest=0;
+bool StampaInfoRouting=false;
+bool stampaInfo=false;
 ControlloUscita led(LEDPIN,false,true);
 
 
@@ -51,12 +53,25 @@ void serialCmdStampaPacchettiRadio(int arg_cnt, char **args)
   if(args[1][0]=='1') radio._printpackets=true;
 }
 
+void serialCmdStampaInfoRouting(int arg_cnt, char **args)
+{
+  if(arg_cnt!=2) return;
+  if(args[1][0]=='0') StampaInfoRouting=false;
+  if(args[1][0]=='1') StampaInfoRouting=true;
+}
+
+void serialCmdStampaInfoStato(int arg_cnt, char **args)
+{
+  if(arg_cnt!=2) return;
+  if(args[1][0]=='0') stampaInfo=false;
+  if(args[1][0]=='1') stampaInfo=true;
+}
 
 void serialCmdMemorizzaIndirizzo(int arg_cnt, char **args)
 {
   if(arg_cnt!=2) return;
   int ind=atoi(args[1]);
-  if(ind<1 || ind>255) {
+  if(ind<2 || ind>255) {
     Serial.println(F("parametro errato"));  
   } else {
     EEPROM.write(0,ind);
@@ -73,7 +88,7 @@ void setup() {
   indirizzo = EEPROM.read(0);
   // info su seriale
   Serial.begin(9600);
-  Serial.println(F("Slave - Firmware: p4.0"));
+  Serial.println(F("Slave - Firmware: p4.1"));
   Serial.print(F("Indirizzo: "));
   Serial.println(indirizzo);
   // imposta radio
@@ -88,8 +103,10 @@ void setup() {
   swVoto.cbInizioStatoOn=ElaboraPulsante;
 
   cmdInit(&Serial);
-  cmdAdd("SP", serialCmdStampaPacchettiRadio);
-  cmdAdd("W", serialCmdMemorizzaIndirizzo);
+  cmdAdd("ip", serialCmdStampaPacchettiRadio);
+  cmdAdd("ir", serialCmdStampaInfoRouting);
+  cmdAdd("is", serialCmdStampaInfoStato);
+  cmdAdd("w", serialCmdMemorizzaIndirizzo);
   FineVoto();
 }
 
@@ -104,7 +121,7 @@ void loop() {
 // algoritmo 2
 void ElaboraRadio() {
   if(!radio.receiveDone()) return;
-  CostruisciListaNodi(radio.SENDERID, radio.RSSI,radio.DATALEN,radio.DATA[0]);
+  CostruisciListaNodi(radio.SENDERID, radio.RSSI);
   if(radio.TARGETID!=indirizzo) return;
   byte destinatario=radio.DATA[1];
   delay(5);     
@@ -141,12 +158,19 @@ void RispondiPollModoNonVoto(byte rip)
   {
     modifichealistabest--;
     p.ListaBest(bestn);
+    if(stampaInfo) Serial.println("tx listabest");
   }
   else
   {
-    p.Sync(micros(),analogRead(PINBATTERIA)>>2);
+    unsigned long int t=micros();
+    p.Sync(t,analogRead(PINBATTERIA)>>2);
+    if(stampaInfo)
+    {
+      Serial.print("tx micros e batt\t");
+      Serial.println(t);
+    } 
   }
-  radio.send(rip, (const byte *)p.dati, p.len,false);
+  radio.send(rip, (const byte *)&p.dati, p.len,false);
 }
 
 void RispondiPollModoVoto(byte rip)
@@ -155,21 +179,32 @@ void RispondiPollModoVoto(byte rip)
   if(votato)
   {
     p.SetOraVoto(Tvoto);
+    if(stampaInfo)
+    {
+      Serial.print("tx oravoto\t");
+      Serial.println(Tvoto);
+    } 
+    
   }
   else
   {
     p.NonVotato();
+    if(stampaInfo) Serial.println("tx non votato");
+
   }
-  radio.send(rip, (const byte *)p.dati, p.len,false);
+  radio.send(rip, (const byte *)&p.dati, p.len,false);
 }
 
 void InizioVoto() 
 {
   votato=false;
+  if(stampaInfo) Serial.println("iniziovoto");
+
 }
 void FineVoto() 
 {
   led.OndaQuadra(20,2800);
+  if(stampaInfo) Serial.println("finevoto");
 }
 // algoritmo 3
 void ElaboraPulsante() {
@@ -178,8 +213,11 @@ void ElaboraPulsante() {
     votato=true;
     Tvoto=micros();
     led.OndaQuadra(1,1);
-    Serial.print(F("VOTATO: tvoto="));      
-    Serial.println(Tvoto,DEC);
+    if(stampaInfo)
+    {
+      Serial.print(F("VOTATO: tvoto="));      
+      Serial.println(Tvoto,DEC);
+    } 
   }
 }
 
@@ -207,7 +245,7 @@ void radioSetup() {
 }
 
 
-void CostruisciListaNodi(byte ind, int sign, byte len, byte dest) {
+void CostruisciListaNodi(byte ind, int sign) {
     // se il nodo ricevuto è più forte del più debole lo sostituisco con questo
     if(ind==0) return;
     //if(dest!=0) return;
@@ -239,15 +277,19 @@ void CostruisciListaNodi(byte ind, int sign, byte len, byte dest) {
           modifichealistabest=3;
         };
     
-    if(radio._printpackets) {
+    if(StampaInfoRouting) {
       Serial.print(F("best: i/s "));
+      Serial.print(ind);
+      Serial.print("\t");
+      Serial.print(sign);
+      Serial.print("\t");
       for (int i=0;i<MAXBESTNEIGHBOURS;i++) 
       {
-        Serial.print(bestn[i].indirizzo);
-        Serial.print("/");
-        Serial.print(bestn[i].segnale);
-        Serial.print(" ");
+        Serial.print(bestn[i].indirizzo),DEC;
+        Serial.print("\t");
+        Serial.print(bestn[i].segnale,DEC);
+        Serial.print("\t");
       }
-      Serial.println(" ");
+      Serial.println();
     }
 }
