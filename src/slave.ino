@@ -3,6 +3,7 @@
  * lo slave risponde al master se interrogato da questo
  * oppure risponde al nodo intermedio se la richiesta è passata da questo
  */
+#define MAXBESTNEIGHBOURS 6
 #include <RFM69.h>
 #include <EEPROM.h>
 #include <Cmd.h>
@@ -35,7 +36,7 @@ Nodo::Nodo() { indirizzo=0; segnale=-127;}
 unsigned long Tvoto;
 byte indirizzo;
 RFM69 radio=RFM69(RFM69_CS, RFM69_IRQ, true, RFM69_IRQN);
-#define MAXBESTNEIGHBOURS 5
+
 Nodo bestn[MAXBESTNEIGHBOURS];
 Antirimbalzo swVoto;
 bool votato=false;
@@ -43,6 +44,7 @@ bool modoVoto=false;
 byte modifichealistabest=0;
 bool StampaInfoRouting=false;
 bool stampaInfo=false;
+bool nodoRipetitore; // true se questo è un nodo ripetitore
 ControlloUscita led(LEDPIN,false,true);
 
 
@@ -67,6 +69,16 @@ void serialCmdStampaInfoStato(int arg_cnt, char **args)
   if(args[1][0]=='1') stampaInfo=true;
 }
 
+void serialCmdImpostaNodoRipetitore(int arg_cnt, char **args)
+{
+  if(arg_cnt!=2) return;
+  if(args[1][0]=='0') nodoRipetitore=false;
+  if(args[1][0]=='1') nodoRipetitore=true;
+  Serial.print(F("Nodo ripetitore:"));  
+  Serial.println(nodoRipetitore);  
+  EEPROM.write(1,nodoRipetitore);
+}
+
 void serialCmdMemorizzaIndirizzo(int arg_cnt, char **args)
 {
   if(arg_cnt!=2) return;
@@ -86,11 +98,13 @@ void setup() {
   pinMode(pinPULSANTE, INPUT_PULLUP);
   // legge indirizzo slave dal byte 0 della eeprom
   indirizzo = EEPROM.read(0);
+  nodoRipetitore= (EEPROM.read(1)==1);
   // info su seriale
   Serial.begin(9600);
-  Serial.println(F("Slave - Firmware: p4.1"));
-  Serial.print(F("Indirizzo: "));
-  Serial.println(indirizzo);
+  Serial.print(F("Slave 4.1 Indirizzo: "));
+  Serial.print(indirizzo);
+  Serial.print(F(" nodo ripetitore: "));
+  Serial.println(nodoRipetitore);
   // imposta radio
   radioSetup();
   // stampa frequenza
@@ -112,7 +126,7 @@ void setup() {
 
 // algoritmo 1
 void loop() {
-  swVoto.Elabora(digitalRead(pinPULSANTE)==LOW);
+  if(!nodoRipetitore) swVoto.Elabora(digitalRead(pinPULSANTE)==LOW);
   ElaboraRadio();
   led.Elabora();
   cmdPoll();
@@ -127,29 +141,42 @@ void ElaboraRadio() {
   delay(5);     
   if(destinatario==indirizzo) {
     led.OndaQuadra(200,2800);
-    switch(radio.DATA[2]) {
-      case 0xaa: // modo voto
-          if(!modoVoto)
-          {
-            modoVoto=true;
-            InizioVoto();
-          }
-          RispondiPollModoVoto(radio.SENDERID);
-          break;
-      case 0x55: // modo normale
-          if(modoVoto)
-          {
-            modoVoto=false;
-            FineVoto();
-          }
-          RispondiPollModoNonVoto(radio.SENDERID);
-          break;
-
-    }
+      if(!nodoRipetitore)
+      {
+        switch(radio.DATA[2]) {
+          case 0xaa: // modo voto
+              if(!modoVoto)
+              {
+                modoVoto=true;
+                InizioVoto();
+              }
+              RispondiPollModoVoto(radio.SENDERID);
+              break;
+          case 0x55: // modo normale
+              if(modoVoto)
+              {
+                modoVoto=false;
+                FineVoto();
+              }
+              RispondiPollModoNonVoto(radio.SENDERID);
+              break;
+        }
+      }
+      else
+      {
+        RispondiPollModoRipetitore(radio.SENDERID);
+      }
   } else {
       if(radio._printpackets) Serial.println(F("pkt da ritrasmettere"));
       radio.send(destinatario, (const byte *)radio.DATA, radio.DATALEN,false);
     }
+  }
+void RispondiPollModoRipetitore(byte rip) 
+{
+  TxPkt p(indirizzo,1);
+  p.RispModoRipetitore();
+  radio.send(rip, (const byte *)&p.dati, p.len,false);
+  
 }
 void RispondiPollModoNonVoto(byte rip)
 {
@@ -256,11 +283,8 @@ void CostruisciListaNodi(byte ind, int sign) {
     // se non c'è calcola trova l'indirizzo del più scarso
     if(!giainlista) 
     {
-      int minimo=127;
-      byte indicemin=0;
-      for (int i=0;i<MAXBESTNEIGHBOURS;i++) if(bestn[i].segnale<minimo) {minimo=bestn[i].segnale; indicemin=i;};
-      // se questo è migliore del più scarso lo sostituisce
-      if(sign>minimo) {bestn[indicemin].segnale=sign; bestn[indicemin].indirizzo=ind; modifichealistabest=3;}
+      bestn[MAXBESTNEIGHBOURS-1].segnale=sign;
+      bestn[MAXBESTNEIGHBOURS-1].indirizzo=ind;
     }
     // poi li ordina
     Nodo tmp;
@@ -283,7 +307,7 @@ void CostruisciListaNodi(byte ind, int sign) {
       Serial.print("\t");
       Serial.print(sign);
       Serial.print("\t");
-      for (int i=0;i<MAXBESTNEIGHBOURS;i++) 
+      for (int i=0;i<MAXBESTNEIGHBOURS-1;i++) 
       {
         Serial.print(bestn[i].indirizzo),DEC;
         Serial.print("\t");
