@@ -14,7 +14,7 @@ void TxPkt::ListaBest(Nodo* best)
     dati[0]=mittente;
     dati[1]=destinatario;
     dati[2]=2;
-    for(int j=0;j<MAXBESTNEIGHBOURS-1;j++)
+    for(int j=0;j<5;j++)
     {
         dati[2*j+3]=best[j].indirizzo;
         dati[2*j+4]=best[j].segnale;

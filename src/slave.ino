@@ -3,7 +3,7 @@
  * lo slave risponde al master se interrogato da questo
  * oppure risponde al nodo intermedio se la richiesta è passata da questo
  */
-#define MAXBESTNEIGHBOURS 6
+
 #include <RFM69.h>
 #include <EEPROM.h>
 #include <Cmd.h>
@@ -37,7 +37,7 @@ unsigned long Tvoto;
 byte indirizzo;
 RFM69 radio=RFM69(RFM69_CS, RFM69_IRQ, true, RFM69_IRQN);
 
-Nodo bestn[MAXBESTNEIGHBOURS];
+Nodo bestn[6];
 Antirimbalzo swVoto;
 bool votato=false;
 bool modoVoto=false;
@@ -279,17 +279,19 @@ void CostruisciListaNodi(byte ind, int sign) {
     //if(len<2) return;
     // controlla se il nuovo nodo è già in lista
     bool giainlista=false;
-    for (int i=0;i<MAXBESTNEIGHBOURS;i++) if(bestn[i].indirizzo==ind) {bestn[i].segnale=sign; giainlista=true;};
+    for (int i=0;i<5;i++) if(bestn[i].indirizzo==ind) {bestn[i].segnale=sign; bestn[i].tultimopkt=millis(); giainlista=true; break;};
+    for (int i=0;i<5;i++) if((millis() - bestn[i].tultimopkt) > 10000) {bestn[i].segnale=-127; bestn[i].indirizzo=0;};
     // se non c'è calcola trova l'indirizzo del più scarso
     if(!giainlista) 
     {
-      bestn[MAXBESTNEIGHBOURS-1].segnale=sign;
-      bestn[MAXBESTNEIGHBOURS-1].indirizzo=ind;
+      bestn[5].segnale=sign;
+      bestn[5].indirizzo=ind;
+      bestn[5].tultimopkt=millis();
     }
     // poi li ordina
     Nodo tmp;
-    for (int i=0;i<MAXBESTNEIGHBOURS-1;i++) 
-      for (int k=i+1;k<MAXBESTNEIGHBOURS;k++) 
+    for (int i=0;i<5;i++) 
+      for (int k=i+1;k<6;k++) 
         if(bestn[k].segnale>bestn[i].segnale) 
         {
           tmp.indirizzo=bestn[k].indirizzo; 
@@ -307,9 +309,9 @@ void CostruisciListaNodi(byte ind, int sign) {
       Serial.print("\t");
       Serial.print(sign);
       Serial.print("\t");
-      for (int i=0;i<MAXBESTNEIGHBOURS-1;i++) 
+      for (int i=0;i<5;i++) 
       {
-        Serial.print(bestn[i].indirizzo),DEC;
+        Serial.print(bestn[i].indirizzo,DEC);
         Serial.print("\t");
         Serial.print(bestn[i].segnale,DEC);
         Serial.print("\t");
