@@ -45,7 +45,9 @@ byte modifichealistabest=0;
 bool StampaInfoRouting=false;
 bool stampaInfo=false;
 bool nodoRipetitore; // true se questo è un nodo ripetitore
+int numeropoll; // contatore numero di poll (serve per decidere cosa trasmettere in modo non voto)
 ControlloUscita led(LEDPIN,false,true);
+
 
 
 void serialCmdStampaPacchettiRadio(int arg_cnt, char **args)
@@ -101,7 +103,7 @@ void setup() {
   nodoRipetitore= (EEPROM.read(1)==1);
   // info su seriale
   Serial.begin(9600);
-  Serial.print(F("Slave 4.1 Indirizzo: "));
+  Serial.print(F("Slave 4.3 Indirizzo: "));
   Serial.print(indirizzo);
   Serial.print(F(" nodo ripetitore: "));
   Serial.println(nodoRipetitore);
@@ -140,32 +142,32 @@ void ElaboraRadio() {
   byte destinatario=radio.DATA[1];
   delay(5);     
   if(destinatario==indirizzo) {
-    led.OndaQuadra(200,2800);
-      if(!nodoRipetitore)
-      {
-        switch(radio.DATA[2]) {
-          case 0xaa: // modo voto
-              if(!modoVoto)
-              {
-                modoVoto=true;
-                InizioVoto();
-              }
-              RispondiPollModoVoto(radio.SENDERID);
-              break;
-          case 0x55: // modo normale
-              if(modoVoto)
-              {
-                modoVoto=false;
-                FineVoto();
-              }
-              RispondiPollModoNonVoto(radio.SENDERID);
-              break;
-        }
+    numeropoll++;
+    if(!nodoRipetitore)
+    {
+      switch(radio.DATA[2]) {
+        case 0xaa: // modo voto
+            if(!modoVoto)
+            {
+              modoVoto=true;
+              InizioVoto();
+            }
+            RispondiPollModoVoto(radio.SENDERID);
+            break;
+        case 0x55: // modo normale
+            if(modoVoto)
+            {
+              modoVoto=false;
+              FineVoto();
+            }
+            RispondiPollModoNonVoto(radio.SENDERID);
+            break;
       }
-      else
-      {
-        RispondiPollModoRipetitore(radio.SENDERID);
-      }
+    }
+    else
+    {
+      RispondiPollModoRipetitore(radio.SENDERID);
+    }
   } else {
       if(radio._printpackets) Serial.println(F("pkt da ritrasmettere"));
       radio.send(destinatario, (const byte *)radio.DATA, radio.DATALEN,false);
@@ -181,7 +183,7 @@ void RispondiPollModoRipetitore(byte rip)
 void RispondiPollModoNonVoto(byte rip)
 {
   TxPkt p(indirizzo,1);
-  if(modifichealistabest>0)
+  if(modifichealistabest>0 && (numeropoll & 1 == 1))
   {
     modifichealistabest--;
     p.ListaBest(bestn);
@@ -226,6 +228,7 @@ void InizioVoto()
 {
   votato=false;
   if(stampaInfo) Serial.println("iniziovoto");
+  led.OndaQuadra(100,200);
 
 }
 void FineVoto() 
