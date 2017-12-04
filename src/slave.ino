@@ -11,6 +11,7 @@
 #include "TxPkt.h"
 #include "ControlloUscita.h"
 #include <Cmd.h>
+#include <RFM69registers.h>
 
 
 #define pinPULSANTE 3
@@ -26,8 +27,6 @@
 //#define MASTER 0
 
 #define LEDPIN 4
-
-
 
 Nodo::Nodo() { indirizzo=0; segnale=-127;}
 
@@ -94,6 +93,22 @@ void serialCmdMemorizzaIndirizzo(int arg_cnt, char **args)
     Serial.println(ind);
   }
 }
+void serialCmdPrintRadioReg(int arg_cnt, char **args)
+{
+    radio.readAllRegs();
+}
+void serialCmdWriteRadioReg(int arg_cnt, char **args)
+{
+    if(arg_cnt!=3) return;
+    byte reg=atoi((const char *)args[1]);
+    byte val=atoi((const char *)args[2]);
+    if(reg<0) return;
+    if(reg>0x71) return;
+    radio.writeReg(reg,val);
+    Serial.print(reg,HEX);
+    Serial.print(" ");
+    Serial.println(val,HEX);
+}
 
 void setup() {
   // pin pulsante col pullup
@@ -102,8 +117,8 @@ void setup() {
   indirizzo = EEPROM.read(0);
   nodoRipetitore= (EEPROM.read(1)==1);
   // info su seriale
-  Serial.begin(9600);
-  Serial.print(F("Slave 4.3 Indirizzo: "));
+  Serial.begin(250000);
+  Serial.print(F("Slave 4.4 Indirizzo: "));
   Serial.print(indirizzo);
   Serial.print(F(" nodo ripetitore: "));
   Serial.println(nodoRipetitore);
@@ -123,7 +138,11 @@ void setup() {
   cmdAdd("ir", serialCmdStampaInfoRouting);
   cmdAdd("is", serialCmdStampaInfoStato);
   cmdAdd("w", serialCmdMemorizzaIndirizzo);
-  FineVoto();
+  cmdAdd("radioreg", serialCmdPrintRadioReg);
+  cmdAdd("writeradioreg", serialCmdWriteRadioReg);
+  led.OndaQuadra(20,2800);
+  votato=false;
+  modoVoto=false;
 }
 
 // algoritmo 1
@@ -137,11 +156,13 @@ void loop() {
 // algoritmo 2
 void ElaboraRadio() {
   if(!radio.receiveDone()) return;
+  if (radio._printpackets) stampapkt(radio.SENDERID,radio.TARGETID,radio.DATA,radio.DATALEN);
   CostruisciListaNodi(radio.SENDERID, radio.RSSI);
   if(radio.TARGETID!=indirizzo) return;
   byte destinatario=radio.DATA[1];
   delay(5);     
   if(destinatario==indirizzo) {
+    if(!votato) led.OndaQuadra(20,2800);
     numeropoll++;
     if(!nodoRipetitore)
     {
@@ -235,6 +256,7 @@ void FineVoto()
 {
   led.OndaQuadra(20,2800);
   if(stampaInfo) Serial.println("finevoto");
+  votato=false;
 }
 // algoritmo 3
 void ElaboraPulsante() {
@@ -252,27 +274,7 @@ void ElaboraPulsante() {
 }
 
 
-void radioSetup() {
-  // Hard Reset the RFM module 
-  Serial.println("radioSetup");
-  pinMode(RFM69_RST, OUTPUT); 
-  digitalWrite(RFM69_RST, HIGH); 
-  delay(100);
-  digitalWrite(RFM69_RST, LOW); 
-  delay(100);
-	radio.initialize(RF69_868MHZ,indirizzo,NETWORKID);
- /*
-  radio.writeReg(0x03,0x0D); // 9k6
-  radio.writeReg(0x04,0x05);
-  */
-  radio.writeReg(0x03,0x00); // 153k6
-  radio.writeReg(0x04,0xD0);
-  radio.writeReg(0x37,radio.readReg(0x37) | 0b01010000); // data whitening e no address filter
-  radio.setFrequency(FREQUENCY);
-	radio.setHighPower(); 
-  radio.setPowerLevel(31);
-  radio.promiscuous(true);
-}
+
 
 
 void CostruisciListaNodi(byte ind, int sign) {
@@ -321,4 +323,40 @@ void CostruisciListaNodi(byte ind, int sign) {
       }
       Serial.println();
     }
+}
+
+void stampapkt(byte SENDERID,byte TARGETID, byte *DATA,int DATALEN) {
+Serial.print(F("rxFrame: time/sender/target/dati: "));
+	  Serial.print(micros());
+	  Serial.print("/");
+	  Serial.print(SENDERID);
+	  Serial.print("/");
+	  Serial.print(TARGETID);
+	  Serial.print("/D:");
+	  for (uint8_t i = 0; i < DATALEN; i++){
+	      Serial.print(DATA[i],HEX);
+		  Serial.print("/");
+  	
+	  }
+	  Serial.println("");    
+}
+
+void radioSetup() {
+  // Hard Reset the RFM module 
+  Serial.println("radioSetup");
+  pinMode(RFM69_RST, OUTPUT); 
+  digitalWrite(RFM69_RST, HIGH); 
+  delay(100);
+  digitalWrite(RFM69_RST, LOW); 
+  delay(100);
+	radio.initialize(RF69_868MHZ,indirizzo,NETWORKID);
+  radio.writeReg(REG_BITRATEMSB,RF_BITRATEMSB_50000);
+  radio.writeReg(REG_BITRATELSB,RF_BITRATELSB_50000);
+  radio.writeReg(REG_FDEVMSB,RF_FDEVMSB_50000);
+  radio.writeReg(REG_FDEVLSB,RF_FDEVLSB_50000);
+  radio.writeReg(REG_PACKETCONFIG1,RF_PACKET1_FORMAT_VARIABLE | RF_PACKET1_DCFREE_OFF | RF_PACKET1_CRC_ON | RF_PACKET1_CRCAUTOCLEAR_ON | RF_PACKET1_ADRSFILTERING_OFF); // data whitening e no address filter
+  radio.setFrequency(FREQUENCY);
+	radio.setHighPower(); 
+  radio.setPowerLevel(31);
+  radio.promiscuous(true);
 }
