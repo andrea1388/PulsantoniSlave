@@ -118,7 +118,7 @@ void setup() {
   nodoRipetitore= (EEPROM.read(1)==1);
   // info su seriale
   Serial.begin(250000);
-  Serial.print(F("Slave 4.4 Indirizzo: "));
+  Serial.print(F("Slave 4.6 Indirizzo: "));
   Serial.print(indirizzo);
   Serial.print(F(" nodo ripetitore: "));
   Serial.println(nodoRipetitore);
@@ -138,6 +138,7 @@ void setup() {
   cmdAdd("ir", serialCmdStampaInfoRouting);
   cmdAdd("is", serialCmdStampaInfoStato);
   cmdAdd("w", serialCmdMemorizzaIndirizzo);
+  cmdAdd("nr", serialCmdImpostaNodoRipetitore);
   cmdAdd("radioreg", serialCmdPrintRadioReg);
   cmdAdd("writeradioreg", serialCmdWriteRadioReg);
   led.OndaQuadra(20,2800);
@@ -301,10 +302,13 @@ void CostruisciListaNodi(byte ind, int sign) {
         {
           tmp.indirizzo=bestn[k].indirizzo; 
           tmp.segnale=bestn[k].segnale; 
+          tmp.tultimopkt=bestn[k].tultimopkt;
           bestn[k].segnale=bestn[i].segnale; 
           bestn[k].indirizzo=bestn[i].indirizzo;
+          bestn[k].tultimopkt=bestn[i].tultimopkt;
           bestn[i].indirizzo=tmp.indirizzo;
           bestn[i].segnale=tmp.segnale; 
+          bestn[i].tultimopkt=tmp.tultimopkt; 
           modifichealistabest=3;
         };
     
